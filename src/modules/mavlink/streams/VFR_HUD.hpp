@@ -40,6 +40,9 @@
 #include <uORB/topics/vehicle_air_data.h>
 #include <uORB/topics/vehicle_local_position.h>
 
+// #undef __cplusplus  // WARNING：MUST BE COMMENTED BEFORE COMPILING
+#include <uORB/topics/vehicle_angular_acceleration.h>
+
 class MavlinkStreamVFRHUD : public MavlinkStream
 {
 public:
@@ -53,7 +56,7 @@ public:
 
 	unsigned get_size() override
 	{
-		if (_lpos_sub.advertised() || _airspeed_validated_sub.advertised()) {
+		if (_angular_acceleration_sub.advertised()) {
 			return MAVLINK_MSG_ID_VFR_HUD_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES;
 		}
 
@@ -70,60 +73,70 @@ private:
 	uORB::Subscription _airspeed_validated_sub{ORB_ID(airspeed_validated)};
 	uORB::Subscription _air_data_sub{ORB_ID(vehicle_air_data)};
 
+	uORB::Subscription _angular_acceleration_sub{ORB_ID(vehicle_angular_acceleration)};
+
 	bool send() override
 	{
-		if (_lpos_sub.updated() || _airspeed_validated_sub.updated()) {
+		if (_angular_acceleration_sub.updated()) {
 
-			vehicle_local_position_s lpos{};
-			_lpos_sub.copy(&lpos);
+			// vehicle_local_position_s lpos{};
+			// _lpos_sub.copy(&lpos);
 
-			actuator_armed_s armed{};
-			_armed_sub.copy(&armed);
+			// actuator_armed_s armed{};
+			// _armed_sub.copy(&armed);
 
-			airspeed_validated_s airspeed_validated{};
-			_airspeed_validated_sub.copy(&airspeed_validated);
+			// airspeed_validated_s airspeed_validated{};
+			// _airspeed_validated_sub.copy(&airspeed_validated);
+
+			// mavlink_vfr_hud_t msg{};
+			// msg.airspeed = airspeed_validated.calibrated_airspeed_m_s;
+			// msg.groundspeed = sqrtf(lpos.vx * lpos.vx + lpos.vy * lpos.vy);
+			// msg.heading = math::degrees(matrix::wrap_2pi(lpos.heading));
+
+			// if (armed.armed) {
+			// 	actuator_controls_s act0{};
+			// 	actuator_controls_s act1{};
+			// 	_act0_sub.copy(&act0);
+			// 	_act1_sub.copy(&act1);
+
+			// 	// VFR_HUD throttle should only be used for operator feedback.
+			// 	// VTOLs switch between actuator_controls_0 and actuator_controls_1. During transition there isn't a
+			// 	// a single throttle value, but this should still be a useful heuristic for operator awareness.
+			// 	//
+			// 	// Use ACTUATOR_CONTROL_TARGET if accurate states are needed.
+			// 	msg.throttle = 100 * math::max(
+			// 			       act0.control[actuator_controls_s::INDEX_THROTTLE],
+			// 			       act1.control[actuator_controls_s::INDEX_THROTTLE]);
+
+			// } else {
+			// 	msg.throttle = 0.0f;
+			// }
+
+			// if (lpos.z_valid && lpos.z_global) {
+			// 	/* use local position estimate */
+			// 	msg.alt = -lpos.z + lpos.ref_alt;
+
+			// } else {
+			// 	vehicle_air_data_s air_data{};
+			// 	_air_data_sub.copy(&air_data);
+
+			// 	/* fall back to baro altitude */
+			// 	if (air_data.timestamp > 0) {
+			// 		msg.alt = air_data.baro_alt_meter;
+			// 	}
+			// }
+
+			// if (lpos.v_z_valid) {
+			// 	msg.climb = -lpos.vz;
+			// }
+
+			vehicle_angular_acceleration_s accel_temp{};
+			_angular_acceleration_sub.copy(&accel_temp);
 
 			mavlink_vfr_hud_t msg{};
-			msg.airspeed = airspeed_validated.calibrated_airspeed_m_s;
-			msg.groundspeed = sqrtf(lpos.vx * lpos.vx + lpos.vy * lpos.vy);
-			msg.heading = math::degrees(matrix::wrap_2pi(lpos.heading));
-
-			if (armed.armed) {
-				actuator_controls_s act0{};
-				actuator_controls_s act1{};
-				_act0_sub.copy(&act0);
-				_act1_sub.copy(&act1);
-
-				// VFR_HUD throttle should only be used for operator feedback.
-				// VTOLs switch between actuator_controls_0 and actuator_controls_1. During transition there isn't a
-				// a single throttle value, but this should still be a useful heuristic for operator awareness.
-				//
-				// Use ACTUATOR_CONTROL_TARGET if accurate states are needed.
-				msg.throttle = 100 * math::max(
-						       act0.control[actuator_controls_s::INDEX_THROTTLE],
-						       act1.control[actuator_controls_s::INDEX_THROTTLE]);
-
-			} else {
-				msg.throttle = 0.0f;
-			}
-
-			if (lpos.z_valid && lpos.z_global) {
-				/* use local position estimate */
-				msg.alt = -lpos.z + lpos.ref_alt;
-
-			} else {
-				vehicle_air_data_s air_data{};
-				_air_data_sub.copy(&air_data);
-
-				/* fall back to baro altitude */
-				if (air_data.timestamp > 0) {
-					msg.alt = air_data.baro_alt_meter;
-				}
-			}
-
-			if (lpos.v_z_valid) {
-				msg.climb = -lpos.vz;
-			}
+			msg.airspeed = accel_temp.xyz[0];
+			msg.groundspeed = accel_temp.xyz[1];
+			msg.throttle = accel_temp.xyz[2];
 
 			mavlink_msg_vfr_hud_send_struct(_mavlink->get_channel(), &msg);
 
